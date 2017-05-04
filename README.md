@@ -30,7 +30,7 @@ rd .git /S/Q # windows
 
 6. Type anything to the bot and follow the prompts.
 
-![Animated gif of Quickstart project run in the Bot Emulator](https://github.com/richdizz/microsoft-graph-bot-quickstart-luis/blob/master/Images/MsftGraphBotQuickStartLuis.gif?raw=true)
+![Animated gif of Quickstart project run in the Bot Emulator](https://github.com/richdizz/microsoft-graph-bot-quickstart-luis/blob/master/Images/MsftGraphBotQuickStartLUIS.gif?raw=true)
 
 ## Going further
 The first step in going further would be to register your own appliation at [https://apps.dev.office.com](https://apps.dev.office.com). This will allow you to play with different scopes and Microsoft Graph endpoints. You should also create your own LUIS model at [LUIS](https://www.luis.ai/). The LUIS model referenced in the code has been exported and added to the solution for your reference - [MsftGraphBotQuickStartLUIS.json](https://github.com/richdizz/microsoft-graph-bot-quickstart-luis/blob/master/MsftGraphBotQuickStartLUIS/MsftGraphBotQuickStartLUIS.json). It is also recommended you experiment with the bot in real Bot Framework channels (vs the emulator). The Bot Framework supports a number of channels, including Facebook Messenger, Microsoft Teams, Skype, and much more. You can register a bot at [https://bots.botframework.com](https://bots.botframework.com).
