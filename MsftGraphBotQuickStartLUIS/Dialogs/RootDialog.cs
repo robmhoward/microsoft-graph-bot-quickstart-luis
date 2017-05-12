@@ -34,7 +34,7 @@ namespace MsftGraphBotQuickStart.Dialogs
                 await None(context, result);
             else
             {
-                var query = "https://graph.microsoft.com/v1.0/me/drive/root/search(q='{0}')?$select=id,name,size,webUrl&$top=5";
+                var query = "https://graph.microsoft.com/v1.0/me/drive/search(q='{0}')?$select=id,name,size,webUrl&$top=5";
                 // we will assume only one entity, but LUIS can handle multiple entities
                 if (result.Entities[0].Type == "FileName")
                 {
