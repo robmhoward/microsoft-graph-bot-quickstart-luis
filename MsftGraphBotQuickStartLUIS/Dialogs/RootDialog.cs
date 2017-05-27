@@ -16,7 +16,7 @@ using Newtonsoft.Json.Linq;
 
 namespace MsftGraphBotQuickStart.Dialogs
 {
-    [LuisModel("c138dfee-d228-416f-953e-5307c2b236ac", "25670274c6ad4180a3e4be0e8f4d91d5")]
+    [LuisModel("d1f0646d-4927-4aac-8f44-8d8e8da84965", "782118274fc846a793b16d7ebdf8770a")]
     [Serializable]
     public class RootDialog : LuisDialog<IMessageActivity>
     {
@@ -24,6 +24,30 @@ namespace MsftGraphBotQuickStart.Dialogs
         public async Task None(IDialogContext context, LuisResult result)
         {
             await context.PostAsync("I didn't understand your query...I'm just a simple bot that searches OneDrive. Try a query similar to these:<br/>'find all music'<br/>'find all .pptx files'<br/>'search for mydocument.docx'");
+        }
+
+        [LuisIntent("BlockCalendar")]
+        public async Task BlockCalendar(IDialogContext context, LuisResult result)
+        {
+            await context.PostAsync("Block calendar goes here");
+        }
+
+        [LuisIntent("GetAvailability")]
+        public async Task GetAvailability(IDialogContext context, LuisResult result)
+        {
+            await context.PostAsync("Get availability goes here");
+        }
+
+        [LuisIntent("NextMeeting")]
+        public async Task NextMeeting(IDialogContext context, LuisResult result)
+        {
+            await context.PostAsync("Next meeting goes here");
+        }
+
+        [LuisIntent("ScheduleTime")]
+        public async Task ScheduleTime(IDialogContext context, LuisResult result)
+        {
+            await context.PostAsync("Schedule time goes here");
         }
 
         [LuisIntent("SearchFiles")]
