@@ -79,28 +79,28 @@ namespace MsftGraphBotQuickStart.Dialogs
                     value.end = DateTime.Today.AddDays(2);
                     break;
                 case "monday":
-                    value.start = today.AddDays((1 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((1 - dayOfWeekIndex) % 7 + 1);
+                    value.start = today.AddDays((8 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((8 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "tuesday":
-                    value.start = today.AddDays((2 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((2 - dayOfWeekIndex) % 7 + 1);
+                    value.start = today.AddDays((9 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((9 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "wednesday":
-                    value.start = today.AddDays((3 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((3 - dayOfWeekIndex) % 7 + 1);
+                    value.start = today.AddDays((10 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((10 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "thursday":
-                    value.start = today.AddDays((4 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((4 - dayOfWeekIndex) % 7 + 1);
+                    value.start = today.AddDays((11 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((11 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "friday":
-                    value.start = today.AddDays((5 - dayOfWeekIndex) % 7 );
-                    value.end = today.AddDays((5 - dayOfWeekIndex) % 7 + 1);
+                    value.start = today.AddDays((12 - dayOfWeekIndex) % 7 );
+                    value.end = today.AddDays((12 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "saturday":
-                    value.start = today.AddDays((6 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((6 - dayOfWeekIndex) % 7 + 1);
+                    value.start = today.AddDays((13 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((13 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "sunday":
                     value.start = today.AddDays((7 - dayOfWeekIndex) % 7);
@@ -128,9 +128,9 @@ namespace MsftGraphBotQuickStart.Dialogs
         {
             if (result.Entities.Count > 0 && result.Entities[0].Type == "When")
             {
- 
-                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$top=1&$select=location,subject,start&$orderby=start/datetime";
-                query = string.Format(query, DateTime.UtcNow.ToString(), DateTime.UtcNow.AddDays(1).ToString());
+                When availabilityDates = GetWhen(result.Entities[0]);
+                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$top=1&$select=location,subject,start&$orderby=start/datetime&$filter=categories/any(a:a%20eq%20'Focus%20Time')";
+                query = string.Format(query, availabilityDates.start.ToString(), availabilityDates.end.ToString());
                 // save the query so we can run it after authenticating
                 context.ConversationData.SetValue<string>("GraphQuery", query);
                 // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
@@ -148,8 +148,25 @@ namespace MsftGraphBotQuickStart.Dialogs
                 {
                     var tokenInfo = await authResult;
 
+                    var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, authContext.ConversationData.GetValue<string>("GraphQuery"));
+                    var items = (JArray)json.SelectToken("value");
+                    var reply = ((Activity)authContext.Activity).CreateReply();
+                    foreach (var item in items)
+                    {
+                        // we could get thumbnails for each item using the id, but will keep it simple
+                        ThumbnailCard card = new ThumbnailCard()
+                        {
+                            Title = item.Value<string>("subject"),
+                            Subtitle = $"Start: {item.Value<string>("start/dateTime")}"
+                        };
+                        reply.Attachments.Add(card.ToAttachment());
+                    }
+
+                    reply.AttachmentLayout = AttachmentLayoutTypes.Carousel;
+                    ConnectorClient client = new ConnectorClient(new Uri(authContext.Activity.ServiceUrl));
+                    await client.Conversations.ReplyToActivityAsync(reply);
+
                 }, context.Activity, CancellationToken.None);
-                await context.PostAsync("Get availability goes here");
             } else
             {
                 await None(context, result);
