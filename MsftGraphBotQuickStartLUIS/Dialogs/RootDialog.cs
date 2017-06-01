@@ -32,10 +32,128 @@ namespace MsftGraphBotQuickStart.Dialogs
             await context.PostAsync("Block calendar goes here");
         }
 
+        private class When
+        {
+            public DateTime start;
+            public DateTime end;
+        }
+
+        private int DayOfWeekIndex(DayOfWeek dayOfWeek)
+        {
+            switch (dayOfWeek)
+            {
+                case DayOfWeek.Sunday:
+                    return 0;
+                case DayOfWeek.Monday:
+                    return 1;
+                case DayOfWeek.Tuesday:
+                    return 2;
+                case DayOfWeek.Wednesday:
+                    return 3;
+                case DayOfWeek.Thursday:
+                    return 4;
+                case DayOfWeek.Friday:
+                    return 5;
+                case DayOfWeek.Saturday:
+                    return 6;
+                default:
+                    return -1;
+            }
+        }
+
+        private When GetWhen(EntityRecommendation when)
+        {
+            When value = new When();
+
+            var today = DateTime.Today;
+            int dayOfWeekIndex = DayOfWeekIndex(today.DayOfWeek);
+
+            switch (when.Entity.ToLower())
+            {
+                case "today":
+                    value.start = DateTime.Today;
+                    value.end = DateTime.Today.AddDays(1);
+                    break;
+                case "tomorrow":
+                    value.start = DateTime.Today.AddDays(1);
+                    value.end = DateTime.Today.AddDays(2);
+                    break;
+                case "monday":
+                    value.start = today.AddDays((1 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((1 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "tuesday":
+                    value.start = today.AddDays((2 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((2 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "wednesday":
+                    value.start = today.AddDays((3 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((3 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "thursday":
+                    value.start = today.AddDays((4 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((4 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "friday":
+                    value.start = today.AddDays((5 - dayOfWeekIndex) % 7 );
+                    value.end = today.AddDays((5 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "saturday":
+                    value.start = today.AddDays((6 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((6 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "sunday":
+                    value.start = today.AddDays((7 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((7 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                case "next week":
+                    value.start = today.AddDays((7 - dayOfWeekIndex) % 7);
+                    value.end = today.AddDays((7 - dayOfWeekIndex) % 7 + 8);
+                    break;
+                case "this week":
+                    value.start = today;
+                    value.end = today.AddDays((7 - dayOfWeekIndex) % 7 + 1);
+                    break;
+                default:
+                    value.start = today;
+                    value.end = today.AddDays(1);
+                    break;
+            }
+
+            return value;
+        }
+
         [LuisIntent("GetAvailability")]
         public async Task GetAvailability(IDialogContext context, LuisResult result)
         {
-            await context.PostAsync("Get availability goes here");
+            if (result.Entities.Count > 0 && result.Entities[0].Type == "When")
+            {
+ 
+                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$top=1&$select=location,subject,start&$orderby=start/datetime";
+                query = string.Format(query, DateTime.UtcNow.ToString(), DateTime.UtcNow.AddDays(1).ToString());
+                // save the query so we can run it after authenticating
+                context.ConversationData.SetValue<string>("GraphQuery", query);
+                // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
+                AuthenticationOptions options = new AuthenticationOptions()
+                {
+                    Authority = ConfigurationManager.AppSettings["aad:Authority"],
+                    ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
+                    ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
+                    Scopes = new string[] { "Files.Read", "Calendars.Read" },
+                    RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
+                };
+
+                // Forward the dialog to the AuthDialog to sign the user in and get an access token for calling the Microsoft Graph
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
+                {
+                    var tokenInfo = await authResult;
+
+                }, context.Activity, CancellationToken.None);
+                await context.PostAsync("Get availability goes here");
+            } else
+            {
+                await None(context, result);
+            }
         }
 
         [LuisIntent("NextMeeting")]
