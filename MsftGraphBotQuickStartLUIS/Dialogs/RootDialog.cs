@@ -65,7 +65,7 @@ namespace MsftGraphBotQuickStart.Dialogs
         {
             When value = new When();
 
-            var today = DateTime.Today;
+            var today = DateTime.Today.ToLocalTime(); //DateTime.Today;
             int dayOfWeekIndex = DayOfWeekIndex(today.DayOfWeek);
 
             switch (when.Entity.ToLower())
@@ -123,15 +123,15 @@ namespace MsftGraphBotQuickStart.Dialogs
             return value;
         }
 
-        [LuisIntent("GetAvailability")]
-        public async Task GetAvailability(IDialogContext context, LuisResult result)
+        private async Task GetFocusTime(IDialogContext context, LuisResult result)
         {
             if (result.Entities.Count > 0 && result.Entities[0].Type == "When")
             {
                 When availabilityDates = GetWhen(result.Entities[0]);
-                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$top=1&$select=location,subject,start&$orderby=start/datetime&$filter=categories/any(a:a%20eq%20'Focus%20Time')";
-                query = string.Format(query, availabilityDates.start.ToString(), availabilityDates.end.ToString());
+                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end&$orderby=start/datetime&$filter=categories/any(a:a%20eq%20'Focus%20Time')";
+                query = string.Format(query, availabilityDates.start.ToUniversalTime().ToString(), availabilityDates.end.ToUniversalTime().ToString());
                 // save the query so we can run it after authenticating
+                context.ConversationData.SetValue<string>("When", result.Entities[0].Entity);
                 context.ConversationData.SetValue<string>("GraphQuery", query);
                 // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
                 AuthenticationOptions options = new AuthenticationOptions()
@@ -151,23 +151,97 @@ namespace MsftGraphBotQuickStart.Dialogs
                     var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, authContext.ConversationData.GetValue<string>("GraphQuery"));
                     var items = (JArray)json.SelectToken("value");
                     var reply = ((Activity)authContext.Activity).CreateReply();
-                    foreach (var item in items)
+                    if (items.Count > 0)
                     {
-                        // we could get thumbnails for each item using the id, but will keep it simple
-                        ThumbnailCard card = new ThumbnailCard()
+                        reply.Text = "";
+                        foreach (var item in items)
                         {
-                            Title = item.Value<string>("subject"),
-                            Subtitle = $"Start: {item.Value<string>("start/dateTime")}"
-                        };
-                        reply.Attachments.Add(card.ToAttachment());
+                            string itemString = "* " + item.SelectToken("start").SelectToken("dateTime").Value<DateTime>().ToLocalTime().ToShortTimeString() + " to " + item.SelectToken("end").SelectToken("dateTime").Value<DateTime>().ToLocalTime().ToShortTimeString() + "\r";
+                            reply.Text += itemString;
+                        }
+                    }
+                    else
+                    {
+                        reply.Text = "You have no availability for " + authContext.ConversationData.GetValue<string>("When");
                     }
 
-                    reply.AttachmentLayout = AttachmentLayoutTypes.Carousel;
                     ConnectorClient client = new ConnectorClient(new Uri(authContext.Activity.ServiceUrl));
                     await client.Conversations.ReplyToActivityAsync(reply);
 
                 }, context.Activity, CancellationToken.None);
-            } else
+            }
+            else
+            {
+                await None(context, result);
+            }
+        }
+
+        private List<When> FindScheduleGaps(JArray meetings, When timePeriod, bool treatFocusTimeAsAvailable)
+        {
+            List<When> gaps = new List<When>();
+            gaps.Add(timePeriod);
+
+            foreach (var meeting in meetings)
+            {
+
+            }
+
+            return gaps;
+        }
+
+        [LuisIntent("GetAvailability")]
+        public async Task GetAvailability(IDialogContext context, LuisResult result)
+        {
+            if (result.Entities.Count > 0 && result.Entities[0].Type == "When")
+            {
+                When availabilityDates = GetWhen(result.Entities[0]);
+                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end&$orderby=start/datetime";
+                query = string.Format(query, availabilityDates.start.ToUniversalTime().ToString(), availabilityDates.end.ToUniversalTime().ToString());
+                // save the query so we can run it after authenticating
+                context.ConversationData.SetValue<string>("When", result.Entities[0].Entity);
+                context.ConversationData.SetValue<string>("GraphQuery", query);
+                // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
+                AuthenticationOptions options = new AuthenticationOptions()
+                {
+                    Authority = ConfigurationManager.AppSettings["aad:Authority"],
+                    ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
+                    ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
+                    Scopes = new string[] { "Files.Read", "Calendars.Read" },
+                    RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
+                };
+
+                // Forward the dialog to the AuthDialog to sign the user in and get an access token for calling the Microsoft Graph
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
+                {
+                    var tokenInfo = await authResult;
+
+                    var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, authContext.ConversationData.GetValue<string>("GraphQuery"));
+                    var items = (JArray)json.SelectToken("value");
+
+                    List<When> gaps = FindScheduleGaps(items, availabilityDates, true);
+
+
+                    var reply = ((Activity)authContext.Activity).CreateReply();
+                    if (gaps.Count > 0)
+                    {
+                        reply.Text = "";
+                        foreach (var item in gaps)
+                        {
+                            string itemString = "* " + item.start.ToLocalTime().ToShortTimeString() + " to " + item.end.ToLocalTime().ToShortTimeString() + "\r";
+                            reply.Text += itemString;
+                        }
+                    }
+                    else
+                    {
+                        reply.Text = "You have no availability for " + authContext.ConversationData.GetValue<string>("When");
+                    }
+
+                    ConnectorClient client = new ConnectorClient(new Uri(authContext.Activity.ServiceUrl));
+                    await client.Conversations.ReplyToActivityAsync(reply);
+
+                }, context.Activity, CancellationToken.None);
+            }
+            else
             {
                 await None(context, result);
             }
