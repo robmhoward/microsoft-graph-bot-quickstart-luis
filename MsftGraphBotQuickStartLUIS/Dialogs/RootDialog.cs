@@ -345,12 +345,16 @@ namespace MsftGraphBotQuickStart.Dialogs
             await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
             {
                 var tokenInfo = await authResult;
+
+                var mailboxSettingsJson = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, "https://graph.microsoft.com/v1.0/me?$select=mailboxSettings");
+                TimeZoneInfo timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(mailboxSettingsJson.SelectToken("mailboxSettings").SelectToken("timeZone").Value<string>());
+
                 var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, authContext.ConversationData.GetValue<string>("GraphQuery"));
 
                 var nextMeeting = ((JArray)json.SelectToken("value"))[0];
                 var responseText = string.Format("Your next meeting '{0}' is at {1} in {2}",
                     nextMeeting.SelectToken("subject").Value<string>(),
-                    nextMeeting.SelectToken("start").SelectToken("dateTime").Value<DateTime>().ToLocalTime().ToString(),
+                    TimeZoneInfo.ConvertTimeFromUtc(nextMeeting.SelectToken("start").SelectToken("dateTime").Value<DateTime>(), timeZoneInfo).ToShortTimeString(),
                     nextMeeting.SelectToken("location").SelectToken("displayName").Value<string>());
 
                 var reply = ((Activity)authContext.Activity).CreateReply(responseText);
