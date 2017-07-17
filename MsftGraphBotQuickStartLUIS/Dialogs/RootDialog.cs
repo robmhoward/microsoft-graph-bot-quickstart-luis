@@ -20,10 +20,22 @@ namespace MsftGraphBotQuickStart.Dialogs
     [Serializable]
     public class RootDialog : LuisDialog<IMessageActivity>
     {
+
+        private static TimeZoneInfo defaultTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Pacific Standard Time");
+
+        private AuthenticationOptions authenticationOptions = new AuthenticationOptions()
+        {
+            Authority = ConfigurationManager.AppSettings["aad:Authority"],
+            ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
+            ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
+            Scopes = new string[] { "Files.Read", "Calendars.Read", "MailboxSettings.ReadWrite" },
+            RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
+        };
+
         [LuisIntent("None")]
         public async Task None(IDialogContext context, LuisResult result)
         {
-            await context.PostAsync("I didn't understand your query...I'm just a simple bot that searches OneDrive. Try a query similar to these:<br/>'find all music'<br/>'find all .pptx files'<br/>'search for mydocument.docx'");
+            await context.PostAsync("I didn't understand your query.  Here are a few things I know how to do:<br/>'find all music'<br/>'find all .pptx files'<br/>'search for mydocument.docx'<br/>where's my next meeting?<br/>when am I available on Tuesday?<br/>block my calendar tomorrow");
         }
 
         [LuisIntent("BlockCalendar")]
@@ -32,7 +44,7 @@ namespace MsftGraphBotQuickStart.Dialogs
             await context.PostAsync("Block calendar goes here");
         }
 
-        private class When
+        public class When
         {
             public DateTime start;
             public DateTime end;
@@ -61,62 +73,65 @@ namespace MsftGraphBotQuickStart.Dialogs
             }
         }
 
-        private When GetWhen(EntityRecommendation when)
+        // Returns a When object with UTC DateTime of "when" string expressed in UTC start and end times on a When object
+        private When GetWhen(string when, TimeZoneInfo timeZoneInfo)
         {
             When value = new When();
-
-            var today = DateTime.Today.ToLocalTime(); //DateTime.Today;
+            var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timeZoneInfo);
+            var today = now.Date;
+            //var today = TimeZoneInfo.ConvertTimeFromUtc(DateTime.Today.ToUniversalTime(), timeZoneInfo);
             int dayOfWeekIndex = DayOfWeekIndex(today.DayOfWeek);
+            var utcStartOfToday = TimeZoneInfo.ConvertTimeToUtc(today, timeZoneInfo);
 
-            switch (when.Entity.ToLower())
+            switch (when.ToLower())
             {
                 case "today":
-                    value.start = DateTime.Today;
-                    value.end = DateTime.Today.AddDays(1);
+                    value.start = utcStartOfToday;
+                    value.end = utcStartOfToday.AddDays(1);
                     break;
                 case "tomorrow":
-                    value.start = DateTime.Today.AddDays(1);
-                    value.end = DateTime.Today.AddDays(2);
+                    value.start = utcStartOfToday.AddDays(1);
+                    value.end = utcStartOfToday.AddDays(2);
                     break;
                 case "monday":
-                    value.start = today.AddDays((8 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((8 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((8 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((8 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "tuesday":
-                    value.start = today.AddDays((9 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((9 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((9 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((9 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "wednesday":
-                    value.start = today.AddDays((10 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((10 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((10 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((10 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "thursday":
-                    value.start = today.AddDays((11 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((11 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((11 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((11 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "friday":
-                    value.start = today.AddDays((12 - dayOfWeekIndex) % 7 );
-                    value.end = today.AddDays((12 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((12 - dayOfWeekIndex) % 7 );
+                    value.end = utcStartOfToday.AddDays((12 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "saturday":
-                    value.start = today.AddDays((13 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((13 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((13 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((13 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "sunday":
-                    value.start = today.AddDays((7 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((7 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday.AddDays((7 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((7 - dayOfWeekIndex) % 7 + 1);
                     break;
                 case "next week":
-                    value.start = today.AddDays((7 - dayOfWeekIndex) % 7);
-                    value.end = today.AddDays((7 - dayOfWeekIndex) % 7 + 8);
+                    value.start = utcStartOfToday.AddDays((7 - dayOfWeekIndex) % 7);
+                    value.end = utcStartOfToday.AddDays((7 - dayOfWeekIndex) % 7 + 8);
                     break;
                 case "this week":
-                    value.start = today;
-                    value.end = today.AddDays((7 - dayOfWeekIndex) % 7 + 1);
+                    value.start = utcStartOfToday;
+                    value.end = utcStartOfToday.AddDays((7 - dayOfWeekIndex) % 7 + 1);
                     break;
                 default:
-                    value.start = today;
-                    value.end = today.AddDays(1);
+                    value.start = utcStartOfToday;
+                    value.end = utcStartOfToday.AddDays(1);
                     break;
             }
 
@@ -127,24 +142,15 @@ namespace MsftGraphBotQuickStart.Dialogs
         {
             if (result.Entities.Count > 0 && result.Entities[0].Type == "When")
             {
-                When availabilityDates = GetWhen(result.Entities[0]);
+                When availabilityDates = GetWhen(result.Entities[0].Entity, defaultTimeZoneInfo);
                 var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end&$orderby=start/datetime&$filter=categories/any(a:a%20eq%20'Focus%20Time')";
                 query = string.Format(query, availabilityDates.start.ToUniversalTime().ToString(), availabilityDates.end.ToUniversalTime().ToString());
                 // save the query so we can run it after authenticating
                 context.ConversationData.SetValue<string>("When", result.Entities[0].Entity);
                 context.ConversationData.SetValue<string>("GraphQuery", query);
-                // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
-                AuthenticationOptions options = new AuthenticationOptions()
-                {
-                    Authority = ConfigurationManager.AppSettings["aad:Authority"],
-                    ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
-                    ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
-                    Scopes = new string[] { "Files.Read", "Calendars.Read" },
-                    RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
-                };
 
                 // Forward the dialog to the AuthDialog to sign the user in and get an access token for calling the Microsoft Graph
-                await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
                 {
                     var tokenInfo = await authResult;
 
@@ -176,14 +182,89 @@ namespace MsftGraphBotQuickStart.Dialogs
             }
         }
 
+        public List<When> FindWorkingHoursInTimePeriod(When timePeriod)
+        {
+            List<When> results = new List<When>();
+            for (var i = 0; i < (timePeriod.end - timePeriod.start).Days; i++)
+            {
+                When workingHours = new When();
+                workingHours.start = timePeriod.start.AddDays(i).AddHours(8);
+                workingHours.end = workingHours.start.AddHours(9);
+                results.Add(workingHours);
+            }
+
+            return results;
+        }
+
         private List<When> FindScheduleGaps(JArray meetings, When timePeriod, bool treatFocusTimeAsAvailable)
         {
-            List<When> gaps = new List<When>();
-            gaps.Add(timePeriod);
+            List<When> gaps = FindWorkingHoursInTimePeriod(timePeriod);
 
             foreach (var meeting in meetings)
             {
+                When fill = new When();
+                fill.start = DateTime.SpecifyKind(meeting.SelectToken("start").SelectToken("dateTime").Value<DateTime>(), DateTimeKind.Utc);
+                fill.end = DateTime.SpecifyKind(meeting.SelectToken("end").SelectToken("dateTime").Value<DateTime>(), DateTimeKind.Utc);
+                bool isFocusTime = false;
 
+                if (treatFocusTimeAsAvailable)
+                {
+                    IEnumerable<string> categories = meeting.SelectToken("categories").Values<string>();
+                    
+                    foreach (var category in categories)
+                    {
+                        if (category == "Focus Time")
+                        {
+                            isFocusTime = true;
+                            break;
+                        }
+                    }
+                }
+                List<When> gapsToAdd = new List<When>();
+                List<When> gapsToRemove = new List<When>();
+                if (!isFocusTime)
+                {
+                    foreach (var gap in gaps)
+                    {
+                        if (fill.start < gap.end && fill.end > gap.start)
+                        {
+                            // Fill covers full gap
+                            if (fill.start <= gap.start && fill.end >= gap.end)
+                            {
+                                gapsToRemove.Add(gap);
+                            }
+                            // Fill starts before gap starts and ends before gap ends
+                            else if (fill.start <= gap.start && fill.end < gap.end)
+                            {
+                                gap.start = fill.end;
+                            }
+                            // Fill starts after gap starts and ends after gap ends 
+                            else if (fill.start > gap.start && fill.end >= gap.end)
+                            {
+                                gap.end = fill.start;
+                            }
+                            //Fill falls in the middle of the gap
+                            else if (fill.start > gap.start && fill.end < gap.end)
+                            {
+                                When newGap = new When();
+                                newGap.end = gap.end;
+                                newGap.start = fill.end;
+                                gap.end = fill.start;
+                                gapsToAdd.Add(newGap);
+                            }
+                        }
+                    }
+
+                    foreach (var gap in gapsToRemove)
+                    {
+                        gaps.Remove(gap);
+                    }
+
+                    foreach (var gap in gapsToAdd)
+                    {
+                        gaps.Add(gap);
+                    }
+                }
             }
 
             return gaps;
@@ -194,32 +275,28 @@ namespace MsftGraphBotQuickStart.Dialogs
         {
             if (result.Entities.Count > 0 && result.Entities[0].Type == "When")
             {
-                When availabilityDates = GetWhen(result.Entities[0]);
-                var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end&$orderby=start/datetime";
-                query = string.Format(query, availabilityDates.start.ToUniversalTime().ToString(), availabilityDates.end.ToUniversalTime().ToString());
+                
                 // save the query so we can run it after authenticating
                 context.ConversationData.SetValue<string>("When", result.Entities[0].Entity);
-                context.ConversationData.SetValue<string>("GraphQuery", query);
-                // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
-                AuthenticationOptions options = new AuthenticationOptions()
-                {
-                    Authority = ConfigurationManager.AppSettings["aad:Authority"],
-                    ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
-                    ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
-                    Scopes = new string[] { "Files.Read", "Calendars.Read" },
-                    RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
-                };
 
                 // Forward the dialog to the AuthDialog to sign the user in and get an access token for calling the Microsoft Graph
-                await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
                 {
                     var tokenInfo = await authResult;
+                    string when = authContext.ConversationData.GetValue<string>("When");
 
-                    var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, authContext.ConversationData.GetValue<string>("GraphQuery"));
+                    var mailboxSettingsJson = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, "https://graph.microsoft.com/v1.0/me?$select=mailboxSettings");
+                    TimeZoneInfo timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById(mailboxSettingsJson.SelectToken("mailboxSettings").SelectToken("timeZone").Value<string>());
+
+                    When availabilityDates = GetWhen(when, timeZoneInfo);
+
+                    var calendarQuery = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end,categories&$orderby=start/datetime&$filter=showAs%20eq%20'busy'";
+                    calendarQuery = string.Format(calendarQuery, availabilityDates.start.ToString(), availabilityDates.end.ToString());
+
+                    var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, calendarQuery);
                     var items = (JArray)json.SelectToken("value");
 
                     List<When> gaps = FindScheduleGaps(items, availabilityDates, true);
-
 
                     var reply = ((Activity)authContext.Activity).CreateReply();
                     if (gaps.Count > 0)
@@ -227,13 +304,13 @@ namespace MsftGraphBotQuickStart.Dialogs
                         reply.Text = "";
                         foreach (var item in gaps)
                         {
-                            string itemString = "* " + item.start.ToLocalTime().ToShortTimeString() + " to " + item.end.ToLocalTime().ToShortTimeString() + "\r";
+                            string itemString = "* " + TimeZoneInfo.ConvertTimeFromUtc(item.start, timeZoneInfo).ToShortTimeString() + " to " + TimeZoneInfo.ConvertTimeFromUtc(item.end, timeZoneInfo).ToShortTimeString() + "\r";
                             reply.Text += itemString;
                         }
                     }
                     else
                     {
-                        reply.Text = "You have no availability for " + authContext.ConversationData.GetValue<string>("When");
+                        reply.Text = "You have no availability for " + when;
                     }
 
                     ConnectorClient client = new ConnectorClient(new Uri(authContext.Activity.ServiceUrl));
@@ -250,7 +327,38 @@ namespace MsftGraphBotQuickStart.Dialogs
         [LuisIntent("NextMeeting")]
         public async Task NextMeeting(IDialogContext context, LuisResult result)
         {
-            await context.PostAsync("Next meeting goes here");
+            var query = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$top=1&$select=location,subject,start&$orderby=start/datetime";
+            query = string.Format(query, DateTime.UtcNow.ToString(), DateTime.UtcNow.AddDays(1).ToString());
+            // save the query so we can run it after authenticating
+            context.ConversationData.SetValue<string>("GraphQuery", query);
+            // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
+            AuthenticationOptions options = new AuthenticationOptions()
+            {
+                Authority = ConfigurationManager.AppSettings["aad:Authority"],
+                ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
+                ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
+                Scopes = new string[] { "Files.Read", "Calendars.Read" },
+                RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
+            };
+
+            // Forward the dialog to the AuthDialog to sign the user in and get an access token for calling the Microsoft Graph
+            await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
+            {
+                var tokenInfo = await authResult;
+                var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, authContext.ConversationData.GetValue<string>("GraphQuery"));
+
+                var nextMeeting = ((JArray)json.SelectToken("value"))[0];
+                var responseText = string.Format("Your next meeting '{0}' is at {1} in {2}",
+                    nextMeeting.SelectToken("subject").Value<string>(),
+                    nextMeeting.SelectToken("start").SelectToken("dateTime").Value<DateTime>().ToLocalTime().ToString(),
+                    nextMeeting.SelectToken("location").SelectToken("displayName").Value<string>());
+
+                var reply = ((Activity)authContext.Activity).CreateReply(responseText);
+
+                ConnectorClient client = new ConnectorClient(new Uri(authContext.Activity.ServiceUrl));
+                await client.Conversations.ReplyToActivityAsync(reply);
+
+            }, context.Activity, CancellationToken.None);
         }
 
         [LuisIntent("ScheduleTime")]
@@ -303,18 +411,9 @@ namespace MsftGraphBotQuickStart.Dialogs
 
                 // save the query so we can run it after authenticating
                 context.ConversationData.SetValue<string>("GraphQuery", query);
-                // Initialize AuthenticationOptions with details from AAD v2 app registration (https://apps.dev.microsoft.com)
-                AuthenticationOptions options = new AuthenticationOptions()
-                {
-                    Authority = ConfigurationManager.AppSettings["aad:Authority"],
-                    ClientId = ConfigurationManager.AppSettings["aad:ClientId"],
-                    ClientSecret = ConfigurationManager.AppSettings["aad:ClientSecret"],
-                    Scopes = new string[] { "Files.Read" },
-                    RedirectUrl = ConfigurationManager.AppSettings["aad:Callback"]
-                };
 
                 // Forward the dialog to the AuthDialog to sign the user in and get an access token for calling the Microsoft Graph
-                await context.Forward(new AuthDialog(new MSALAuthProvider(), options), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), async (IDialogContext authContext, IAwaitable<AuthResult> authResult) =>
                 {
                     var tokenInfo = await authResult;
 
