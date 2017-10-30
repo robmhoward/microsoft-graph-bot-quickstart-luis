@@ -56,56 +56,65 @@ namespace MsftGraphBotQuickStart.Dialogs
             }
         }
 
+        public class FindMeetingTimesBody
+        {
+            public List<Attendee> attendees { get; set; }
+            public string meetingDuration { get; set; }
+        }
+
+        public class Attendee
+        {
+            public EmailAddress emailAddress { get; set; }
+            public string type { get; set; }
+        }
+
+        public class EmailAddress
+        {
+            public string address { get; set; }
+        }
+
+        public class MeetingBody
+        {
+            public string subject { get; set; }
+            public EmailBody body { get; set; }
+            public EmailLocation location { get; set; }
+            public MeetingTime start { get; set; }
+            public MeetingTime end { get; set; }
+            public List<Attendee> attendees { get; set; }
+        }
+
+        public class EmailBody
+        {
+            public string contentType { get; set; }
+            public string content { get; set; }
+        }
+
+        public class EmailLocation
+        {
+            public string displayName { get; set; }
+        }
+
+        public class MeetingTime
+        {
+            public string dateTime { get; set; }
+            public string timeZone { get; set; }
+        }
+
+        [Serializable]
+        public class MeetingSuggestion
+        {
+            public DateTime Start { get; set; }
+            public DateTime End { get; set; }
+            public string Description { get; set; }
+            public override string ToString()
+            {
+                return this.Description;
+            }
+        }
+
         #endregion
 
         #region helper functions
-
-
-        private async Task SearchForPeople(IDialogContext context, IAwaitable<AuthResult> authResult)
-        {
-            var tokenInfo = await authResult;
-            List<string> peopleToMeetWith = context.ConversationData.GetValue<List<string>>("WhoToLookup");
-
-
-            var personQuery = string.Format("https://graph.microsoft.com/beta/me/people?$search={0}", peopleToMeetWith[0]);
-            var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, personQuery);
-            var items = (JArray)json.SelectToken("value");
-            List<Person> peopleChoices = new List<Person>();
-
-            foreach (var item in items)
-            {
-                Person person = new Person();
-                person.displayName = item.Value<string>("displayName");
-                person.email = item.SelectToken("emailAddresses")[0].Value<string>("address");
-                person.id = item.Value<string>("id");
-
-                peopleChoices.Add(person);
-            }
-
-            string promptText = string.Format("Which '{0}'?", peopleToMeetWith[0]);
-            peopleToMeetWith.RemoveAt(0);
-            context.ConversationData.SetValue<List<string>>("WhoToLookup", peopleToMeetWith);
-            PromptDialog.Choice<Person>(context, this.ChoosePerson, peopleChoices, promptText);
-        }
-
-        private async Task ChoosePerson(IDialogContext context, IAwaitable<Person> argument)
-        {
-            var person = await argument;
-            List<Person> whoToSchedule = context.ConversationData.GetValue<List<Person>>("WhoToSchedule");
-            whoToSchedule.Add(person);
-            context.ConversationData.SetValue<List<Person>>("WhoToSchedule", whoToSchedule);
-
-            List<string> whoToLookup = context.ConversationData.GetValue<List<string>>("WhoToLookup");
-            if (whoToLookup.Count > 0)
-            {
-                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), SearchForPeople, context.Activity, CancellationToken.None);
-            }
-            else
-            {
-                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), ScheduleTime, context.Activity, CancellationToken.None);
-            }
-
-        }
 
         // Takes a JArray representing meetings and a When describing a time period; returns a list of available times during the When 
         private List<When> FindScheduleGaps(JArray meetings, When timePeriod, bool treatFocusTimeAsAvailable)
@@ -360,7 +369,7 @@ namespace MsftGraphBotQuickStart.Dialogs
 
                     When availabilityDates = GetWhen(when, timeZoneInfo);
 
-                    var calendarQuery = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end,categories&$orderby=start/datetime&$filter=showAs%20eq%20'busy'";
+                    var calendarQuery = "https://graph.microsoft.com/v1.0/me/calendarview?startdatetime={0}&enddatetime={1}&$select=location,subject,start,end,categories&$top=20&$orderby=start/datetime&$filter=showAs%20eq%20'busy'";
                     calendarQuery = string.Format(calendarQuery, availabilityDates.start.ToString(), availabilityDates.end.ToString());
                     var items = (JArray)(await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, calendarQuery)).SelectToken("value");
 
@@ -439,22 +448,50 @@ namespace MsftGraphBotQuickStart.Dialogs
             }
         }
 
-
-        public class FindMeetingTimesBody
+        private async Task SearchForPeople(IDialogContext context, IAwaitable<AuthResult> authResult)
         {
-            public List<Attendee> attendees { get; set; }
-            public string meetingDuration { get; set; }
+            var tokenInfo = await authResult;
+            List<string> peopleToMeetWith = context.ConversationData.GetValue<List<string>>("WhoToLookup");
+
+
+            var personQuery = string.Format("https://graph.microsoft.com/beta/me/people?$search={0}", peopleToMeetWith[0]);
+            var json = await new HttpClient().GetWithAuthAsync(tokenInfo.AccessToken, personQuery);
+            var items = (JArray)json.SelectToken("value");
+            List<Person> peopleChoices = new List<Person>();
+
+            foreach (var item in items)
+            {
+                Person person = new Person();
+                person.displayName = item.Value<string>("displayName");
+                person.email = item.SelectToken("emailAddresses")[0].Value<string>("address");
+                person.id = item.Value<string>("id");
+
+                peopleChoices.Add(person);
+            }
+
+            string promptText = string.Format("Which '{0}'?", peopleToMeetWith[0]);
+            peopleToMeetWith.RemoveAt(0);
+            context.ConversationData.SetValue<List<string>>("WhoToLookup", peopleToMeetWith);
+            PromptDialog.Choice<Person>(context, this.ChoosePerson, peopleChoices, promptText);
         }
 
-        public class Attendee
+        private async Task ChoosePerson(IDialogContext context, IAwaitable<Person> argument)
         {
-            public EmailAddress emailAddress { get; set; }
-            public string type { get; set; }
-        }
+            var person = await argument;
+            List<Person> whoToSchedule = context.ConversationData.GetValue<List<Person>>("WhoToSchedule");
+            whoToSchedule.Add(person);
+            context.ConversationData.SetValue<List<Person>>("WhoToSchedule", whoToSchedule);
 
-        public class EmailAddress
-        {
-            public string address { get; set; }
+            List<string> whoToLookup = context.ConversationData.GetValue<List<string>>("WhoToLookup");
+            if (whoToLookup.Count > 0)
+            {
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), SearchForPeople, context.Activity, CancellationToken.None);
+            }
+            else
+            {
+                await context.Forward(new AuthDialog(new MSALAuthProvider(), authenticationOptions), ScheduleTime, context.Activity, CancellationToken.None);
+            }
+
         }
 
         private async Task ScheduleTime(IDialogContext context, IAwaitable<AuthResult> authResult)
@@ -489,7 +526,7 @@ namespace MsftGraphBotQuickStart.Dialogs
             {
                 MeetingSuggestion suggestion = new MeetingSuggestion();
                 suggestion.Start = item.SelectToken("meetingTimeSlot.start.dateTime").Value<DateTime>();
-                suggestion.End= item.SelectToken("meetingTimeSlot.end.dateTime").Value<DateTime>();
+                suggestion.End = item.SelectToken("meetingTimeSlot.end.dateTime").Value<DateTime>();
 
                 var availabilityString = "";
                 var availability = (JArray)item.SelectToken("attendeeAvailability");
@@ -498,7 +535,7 @@ namespace MsftGraphBotQuickStart.Dialogs
                     var status = availabilityItem.SelectToken("availability").Value<string>();
                     if (status != "free")
                     {
-                        availabilityString += $" {availabilityItem.SelectToken("attendee.emailAddress.address").Value<string>()} is {status} "; 
+                        availabilityString += $" {availabilityItem.SelectToken("attendee.emailAddress.address").Value<string>()} is {status} ";
                     }
                 }
 
@@ -507,7 +544,7 @@ namespace MsftGraphBotQuickStart.Dialogs
                     availabilityString = "everyone is available";
                 }
 
-                suggestion.Description = $"{TimeZoneInfo.ConvertTimeFromUtc(suggestion.Start, timeZoneInfo).ToString()} {availabilityString}"; 
+                suggestion.Description = $"{TimeZoneInfo.ConvertTimeFromUtc(suggestion.Start, timeZoneInfo).ToString()} {availabilityString}";
                 timeChoices.Add(suggestion);
             }
 
@@ -562,50 +599,12 @@ namespace MsftGraphBotQuickStart.Dialogs
             if (json != null)
             {
                 await context.PostAsync($"Sent an invite to your meeting at {suggestion}.");
-            } else
+            }
+            else
             {
                 await context.PostAsync($"It looks like something went wrong.");
             }
-            
-        }
 
-        public class MeetingBody
-        {
-            public string subject { get; set; }
-            public EmailBody body { get; set; }
-            public EmailLocation location { get; set; }
-            public MeetingTime start { get; set; }
-            public MeetingTime end { get; set; }
-            public List<Attendee> attendees { get; set; }
-        }
-
-        public class EmailBody
-        {
-            public string contentType { get; set; }
-            public string content { get; set; }
-        }
-
-        public class EmailLocation
-        {
-            public string displayName { get; set; }
-        }
-
-        public class MeetingTime
-        {
-            public string dateTime { get; set; }
-            public string timeZone { get; set; }
-        }
-
-        [Serializable]
-        public class MeetingSuggestion
-        {
-            public DateTime Start { get; set; }
-            public DateTime End { get; set; }
-            public string Description { get; set; }
-            public override string ToString()
-            {
-                return this.Description;
-            }
         }
 
         [LuisIntent("SearchFiles")]
